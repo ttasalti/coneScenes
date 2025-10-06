@@ -25,7 +25,7 @@ project_root/
 └── main.py                     # Full end-to-end pipeline
 ```
 
-### Generated Outputs
+### Generated Outputs
 
 ```text
 cluster_summary_all.csv        - Raw DBSCAN cluster summaries per scene  
