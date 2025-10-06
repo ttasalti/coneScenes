@@ -26,6 +26,7 @@ project_root/
 ```
 
 ### Generated Outputs
+
 ```text
 cluster_summary_all.csv        - Raw DBSCAN cluster summaries per scene  
 cluster_summary_with_flags.csv - Same, with is_cone boolean flag  
