@@ -51,12 +51,14 @@ overlay_scene1.png             - Overlay of ground-truth and rotated cones
 - The rule-based cone size thresholds were determined based on observations from `label_summary.ipynb`, where maximum values of labeled cones defined the upper bounds for `dx`, `dy`, and `dz`.  
   Lower limits and point count ranges were chosen heuristically to filter out noise and can be adjusted depending on sensor characteristics or clustering density.
 
-### Future Development
+#### Future Development
 
 - A **loss function** should be created to reduce the difference between detected and real cones, and to increase the number of correct detections at the same time.  
   With this loss function, it will be possible to test and tune both the thresholds and DBSCAN hyperparameters.
 
 - Instead of the current rule-based method, more advanced **cone detection techniques** from research papers can be studied and applied to make the system more reliable.
+
+- By using **previous frames** together, time-series based approaches can be developed to achieve more stable and consistent cone detection results.
 
 - A new step can be added to **rebuild the track** using the detected cones.
 
