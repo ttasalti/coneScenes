@@ -1,69 +1,56 @@
-# Cone Detection and Localization Pipeline
+# Cone detection and localisation for Formula Student Driverless
 
-This project processes Formula Student Driverless LiDAR scenes (from the coneScenes dataset) to detect traffic cones, attach vehicle odometry, transform them into global coordinates, and re-express them relative to a reference scene (Scene 1).  
-It includes clustering, rule-based cone filtering, coordinate transformations, and visualization.
+LiDAR pipeline that finds the traffic cones of a Formula Student track in the [coneScenes](https://github.com/Chalmers-Formula-Student/coneScenes) dataset, attaches the car's odometry to each detection, projects the cones into a global frame and re-expresses them relative to the first scene. Clustering with DBSCAN, rule-based cone filtering, coordinate transforms and a comparison against the ground-truth labels.
 
----
+![Ground truth against detected cones in the frame of scene 1](overlay_scene1.png)
 
-### Project Structure
+## Pipeline
 
-```text
-project_root/
-│
-├── cfs_vargarda8/
-│   ├── points/                 # LiDAR .bin files per scene
-│   ├── labels/                 # Ground-truth label .txt files
-│   └── metadata.json           # Odometry and scene metadata
-│
-├── clustering.py               # DBSCAN-based clustering (x, y)
-├── cone_detector.py            # Rule-based cone filtering
-├── attach_odom.py              # Attach odometry to clusters
-├── globalize_cones.py          # Local → global transformation
-├── rotate_to_scene1.py         # Global → Scene-1 local rotation
-├── plot.py                     # Simple scatter plot function
-├── plot_overlay_scene1.py      # Overlay ground-truth vs computed
-└── main.py                     # Full end-to-end pipeline
-```
+1. `clustering.py`: loads each `.bin` point cloud, clusters the points with DBSCAN on (x, y) and summarises every cluster (centroid, extent, point count).
+2. `cone_detector.py`: flags cone-like clusters with size and point-count rules. The upper bounds come from the labelled cones (`label_summary.ipynb`), the lower bounds filter noise.
+3. `attach_odom.py`: joins the car's pose from `metadata.json` (x, y, z, yaw, velocities, timestamp) to each cluster.
+4. `globalize_cones.py`: local to global coordinates.
+5. `rotate_to_scene1.py`: global to the local frame of scene 1, so that every scene can be compared with the first one's labels.
+6. `plot.py`, `plot_overlay_scene1.py`: global map, scene-1 map and the overlay above.
 
-### Generated Outputs
+`main.py` runs the six steps in order. Outputs are the CSVs and PNGs in this repository:
 
 ```text
-cluster_summary_all.csv        - Raw DBSCAN cluster summaries per scene  
-cluster_summary_with_flags.csv - Same, with is_cone boolean flag  
-cones_with_odom.csv            - Clusters merged with odometry  
-cones_global.csv               - Cones in global/world coordinates  
-cones_rotated_scene1.csv       - Global cones transformed to Scene 1 frame  
-global_cones.png               - Visualization of global cone positions  
-scene1_cones.png               - Visualization of Scene 1 cones  
-overlay_scene1.png             - Overlay of ground-truth and rotated cones
+cluster_summary_all.csv         DBSCAN cluster summaries per scene
+cluster_summary_with_flags.csv  the same with an is_cone flag
+cones_with_odom.csv             clusters with odometry attached
+cones_global.csv                cones in global coordinates
+cones_rotated_scene1.csv        cones in the scene-1 frame
+global_cones.png, scene1_cones.png, overlay_scene1.png
 ```
 
-### Personal Notes
+## Data
 
-- Hyperparameter choices were initially adapted from the following reference implementation:  
-  https://github.com/sanchezfdezjavier/Self-driving-LiDAR-cone-detection/blob/main/src/lidar_nodes/src/clustering.py
+The scene used here is `cfs_vargarda8` from coneScenes (Chalmers Formula Student, Vårgårda 2023). It is not included in the repository; download it with the coneScenes CLI and place it next to the scripts:
 
-- DBSCAN is applied only on **(x, y)** coordinates. The z-axis and intensity are not used in clustering decisions; they are included only in per-cluster summaries.
+```text
+cfs_vargarda8/
+├── points/          LiDAR .bin files per scene
+├── labels/          ground-truth cone labels
+└── metadata.json    odometry and scene metadata
+```
 
-- The algorithm is not yet fully stabilized. Results are sensitive to DBSCAN parameters (`eps`, `min_samples`), rule-based thresholds (`dx`, `dy`, `dz`, `N_points`), and transformation settings.
+## Running
 
-- In the transformation step (global → Scene-1), the applied formulas were initially drafted with AI assistance. This part needs to be revisited and rewritten with deeper domain knowledge.
+```bash
+pip install -r requirements.txt
+python main.py
+```
 
-- The rule-based cone size thresholds were determined based on observations from `label_summary.ipynb`, where maximum values of labeled cones defined the upper bounds for `dx`, `dy`, and `dz`.  
-  Lower limits and point count ranges were chosen heuristically to filter out noise and can be adjusted depending on sensor characteristics or clustering density.
+## Notes and limitations
 
-#### Future Development
+- DBSCAN runs on (x, y) only; z and intensity are kept in the cluster summaries but do not affect the clustering.
+- Initial DBSCAN parameters were adapted from [this reference implementation](https://github.com/sanchezfdezjavier/Self-driving-LiDAR-cone-detection/blob/main/src/lidar_nodes/src/clustering.py).
+- Results are sensitive to the DBSCAN parameters (`eps`, `min_samples`) and to the rule thresholds (`dx`, `dy`, `dz`, point count). There is no objective yet that scores a parameter set against the labels, so the values were chosen by inspection.
 
-- A **loss function** should be created to reduce the difference between detected and real cones, and to increase the number of correct detections at the same time.  
-  With this loss function, it will be possible to test and tune both the thresholds and DBSCAN hyperparameters.
+## Next steps
 
-- Instead of the current rule-based method, more advanced **cone detection techniques** from research papers can be studied and applied to make the system more reliable.
-
-- By using **previous frames** together, time-series based approaches can be developed to achieve more stable and consistent cone detection results.
-
-- A new step can be added to **rebuild the track** using the detected cones.
-
-- After building the track, an **ideal racing line** can be found by using geometric or physical models.
-
-- Later, **reinforcement learning** experiments can be started to learn better driving strategies using the reconstructed track and cone information.
-
+- A loss that compares detected and labelled cones, so that thresholds and DBSCAN parameters can be tuned instead of hand-picked.
+- Learned cone detection instead of size rules.
+- Using consecutive frames for temporally stable detections.
+- Rebuilding the track from the detected cones and computing a racing line on it.
