@@ -1,0 +1,3 @@
+reference,landmarks,track_cones,matched,precision,recall,error_mean,error_median
+all labelled cones,155,144,144,0.9290322580645162,1.0,0.03189974688043529,0.028847795225213857
+cones visible in at least one scan,155,144,144,0.9290322580645162,1.0,0.03189974688043529,0.028847795225213857

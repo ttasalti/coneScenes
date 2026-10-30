@@ -1,0 +1,11 @@
+{
+  "eps": 0.5,
+  "min_samples": 2,
+  "rules": {
+    "max_extent": 0.6,
+    "min_height": 0.15,
+    "max_height": 0.6,
+    "min_points": 3,
+    "centre_offset": 0.0
+  }
+}

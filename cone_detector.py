@@ -1,19 +1,32 @@
 """
-Takes cluster summaries and applies simple rule-based thresholds on size and
-point count to mark clusters as cones (is_cone=True/False). Writes only the
-rows where is_cone=True into a new CSV file.
+Keeps the clusters that look like cones. The labelled cones are 0.23 m wide
+and 0.33 m tall, so a cluster must have a small footprint, a height close to
+that of a cone and enough points. The LiDAR only sees the near face of a cone,
+so the centroid is pushed back along the viewing ray by `centre_offset` metres.
 """
 
+import numpy as np
 import pandas as pd
 
-def detect_cones(input_csv: str, output_csv: str) -> None:
-    df = pd.read_csv(input_csv)
-    if 'dx' not in df.columns or 'dy' not in df.columns or 'dz' not in df.columns or 'N_points' not in df.columns:
-        df.to_csv(output_csv, index=False)
-        return
-    dx_ok = (df['dx'] >= 0.05) & (df['dx'] <= 0.23)
-    dy_ok = (df['dy'] >= 0.05) & (df['dy'] <= 0.23)
-    dz_ok = (df['dz'] >= 0.10) & (df['dz'] <= 0.33)
-    n_ok  = (df['N_points'] >= 5) & (df['N_points'] <= 200)
-    df['is_cone'] = dx_ok & dy_ok & dz_ok & n_ok
-    df[df['is_cone'] == True].to_csv(output_csv, index=False)
+DEFAULT_RULES = {
+    'max_extent': 0.4,
+    'min_height': 0.15,
+    'max_height': 0.45,
+    'min_points': 3,
+    'centre_offset': 0.05,
+}
+
+
+def detect_cones(clusters: pd.DataFrame, rules: dict = DEFAULT_RULES) -> pd.DataFrame:
+    extent = np.maximum(clusters['dx'], clusters['dy'])
+    ok = (
+        (extent <= rules['max_extent'])
+        & (clusters['height'] >= rules['min_height'])
+        & (clusters['height'] <= rules['max_height'])
+        & (clusters['n_points'] >= rules['min_points'])
+    )
+    cones = clusters[ok].copy()
+    scale = 1 + rules['centre_offset'] / cones['range']
+    cones['x'] = cones['x'] * scale
+    cones['y'] = cones['y'] * scale
+    return cones
