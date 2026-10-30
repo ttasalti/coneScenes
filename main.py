@@ -2,16 +2,11 @@
 End-to-end pipeline:
 1) Remove the ground and the points near the car in every scan.
 2) Tune DBSCAN and the cone rules on the first half of the scans.
-3) Score detection on the second half, overall and by distance, next to the
-   first version of the pipeline.
+3) Score detection on the second half, overall and by distance.
 4) Move the detections of all scans to the world frame and build a cone map.
 5) Write the tables to results/ and the figures to figures/.
-
-The first version of the pipeline clusters the full scans and takes about
-half an hour for the scene, so it is only scored with --with-first-version.
 """
 
-import argparse
 import json
 import os
 from pathlib import Path
@@ -19,7 +14,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from baseline import baseline_cones
 from clustering import cluster_scan
 from cone_detector import detect_cones
 from dataset import load_labels, load_points, load_scene, scan_to_world
@@ -35,18 +29,14 @@ EXAMPLE_SCAN = 40
 N_JOBS = int(os.environ.get('N_JOBS', 1))
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--with-first-version', action='store_true')
-    args = parser.parse_args()
     Path('results').mkdir(exist_ok=True)
     Path('figures').mkdir(exist_ok=True)
 
     prepared = []
     for s in load_scene(SCENE_DIR):
-        raw = load_points(s['points'])
-        points = remove_ground(raw)
+        points = remove_ground(load_points(s['points']))
         labels = load_labels(s['labels'])
-        prepared.append({**s, 'raw': raw, 'points': points, 'labels': labels,
+        prepared.append({**s, 'points': points, 'labels': labels,
                          'visible': visible_mask(labels, points)})
     tune_scans, test_scans = split_scans(prepared)
 
@@ -58,16 +48,11 @@ if __name__ == '__main__':
     def run(p):
         return detect_cones(cluster_scan(p['points'], params['eps'], params['min_samples']), params['rules'])
 
-    rows, base_rows, outcomes = [], [], {}
+    rows, outcomes = [], {}
     for name, scans in [('tuning scans', tune_scans), ('held-out scans', test_scans)]:
         outcomes[name] = pd.concat([evaluate_scan(run(p), p['labels'], p['visible']) for p in scans])
         rows.append({'split': name, 'scans': len(scans), **summarise(outcomes[name])})
-        if args.with_first_version:
-            base = pd.concat([evaluate_scan(baseline_cones(p['raw']), p['labels'], p['visible']) for p in scans])
-            base_rows.append({'split': name, 'scans': len(scans), **summarise(base)})
     pd.DataFrame(rows).to_csv('results/detection.csv', index=False)
-    if base_rows:
-        pd.DataFrame(base_rows).to_csv('results/detection_first_version.csv', index=False)
 
     test = outcomes['held-out scans']
     test['range_bin'] = pd.cut(test['range'], RANGE_BINS)

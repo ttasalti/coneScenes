@@ -2,16 +2,18 @@
 
 LiDAR pipeline that finds the cones of a Formula Student track in the [coneScenes](https://github.com/Chalmers-Formula-Student/coneScenes) dataset and builds a map of the track from them. Ground removal with RANSAC, DBSCAN clustering, rule-based cone filtering tuned on half of the scans, evaluation against the labelled cones and mapping with the car's odometry.
 
+Work from my time in the driverless team of NOVA Formula Student (2025).
+
 ![Cone map built from the 63 scans of the scene](figures/cone_map.png)
 
 ## Results
 
 The scene has 63 labelled scans. Parameters were tuned on the first 31 scans; the scores below are on the remaining 32, which the tuning never saw. A detection counts as correct if it is within 0.5 m of a labelled cone (one-to-one matching). Recall is measured over the cones the LiDAR actually sees, i.e. labelled cones with at least three non-ground points within 0.3 m, up to 30 m.
 
-| | Precision | Recall | F1 | Mean position error |
-|---|---|---|---|---|
-| This pipeline, held-out scans | 0.95 | 0.96 | 0.96 | 6.8 cm |
-| First version, same scans | 1.00 | 0.12 | 0.21 | 6.8 cm |
+| | Scans | Precision | Recall | F1 | Mean position error |
+|---|---|---|---|---|---|
+| Tuning half | 31 | 0.95 | 0.96 | 0.96 | 5.7 cm |
+| Held-out half | 32 | 0.95 | 0.96 | 0.96 | 6.8 cm |
 
 By distance from the car (held-out scans):
 
@@ -41,16 +43,6 @@ Beyond 20 m a cone returns only a few points, and other small objects next to th
 
 `main.py` runs everything and writes the tables to `results/` and the figures to `figures/`.
 
-## What changed from the first version
-
-The first version (kept in `baseline.py` for comparison) found only 12% of the visible cones and its map did not line up with the track. Three problems:
-
-- **DBSCAN on standardised coordinates.** The points were scaled with `StandardScaler` before clustering, so `eps=0.3` meant 0.7 to 0.9 m rather than 30 cm. Together with the ground points, this put 99% of each scan into one cluster.
-- **No ground removal.** Without it, cones touch the ground points around them and do not form clusters of their own. About half of each scan (11% to 56%) is also returns within 1.5 m of the sensor, from the car itself.
-- **Odometry read the wrong way round.** The poses in `metadata.json` give the map origin as seen from the car, not the car's position on the map, so the world frame is `R(-yaw) (p - (x, y))`. This was checked against the labels, which list the whole track in the frame of each scan: moving the labels of every scan to the world frame with this convention puts them on top of each other exactly.
-
-The first version also compared the cones of all scans with the labels of scan 1 in one plot, which cannot show whether a single scan was detected correctly. Evaluation is now per scan, against that scan's labels.
-
 ## Data
 
 The scene is `cfs_vargarda8` from coneScenes (Chalmers Formula Student, Vårgårda, 2023), the sample scene linked from the coneScenes repository. It is not included here; download it and place it next to the scripts:
@@ -62,12 +54,13 @@ cfs_vargarda8/
 └── metadata.json    odometry per scan
 ```
 
+The labels list every cone of the track in the frame of each scan, also the cones the sensor cannot see. The poses in `metadata.json` give the map origin as seen from the car rather than the car's position on the map, so a point `p` in a scan maps to the world as `R(-yaw) (p - (x, y))`. With this convention the labels of all 63 scans land on the same world positions.
+
 ## Running
 
 ```bash
 pip install -r requirements.txt
-python main.py                         # about 1.5 minutes on 18 cores
-python main.py --with-first-version    # also scores baseline.py, about 30 minutes more
+python main.py    # about two minutes on 18 cores
 ```
 
 `N_JOBS` sets the number of processes for the grid search, e.g. `N_JOBS=8 python main.py`.
@@ -77,4 +70,4 @@ python main.py --with-first-version    # also scores baseline.py, about 30 minut
 - One scene only. The scans of the tuning and held-out halves come from the same track and session, so the scores say little about other tracks, weather or sensors.
 - Cone colour (yellow or blue) is not predicted.
 - Visibility is defined from the same point cloud the detector uses; cones hidden behind other cones or outside the field of view are not counted as misses.
-- Detection is per scan; using consecutive scans would remove most of the far-range false positives.
+- Detection is per scan. Requiring a cone to appear in consecutive scans is the obvious next step against the far-range false positives.
